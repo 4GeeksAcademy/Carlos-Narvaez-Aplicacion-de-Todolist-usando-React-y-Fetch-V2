@@ -1,164 +1,110 @@
 import React, { useState, useEffect } from "react";
 
 export const TodoListApi = () => {
+    const [lista, setLista] = useState([]);
+    const [tarea, setTarea] = useState("");
 
-    //estado (inicialmente esta vacio)
-    const [lista, setLista] = useState([])
-    const [tarea, setTarea] = useState("")
+    const API_URL = "https://playground.4geeks.com/todo";
+    const USER = "carlosn"; 
 
-
-    //GUARDO LA URL EN UN ESPACIO DE MEMORIA
-    const API_URL = "https://playground.4geeks.com/todo"
-
-    const crearUsuario = () => {
-        fetch(API_URL + "/users/CarlosN", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        })
-            .then(response => response.json()) //conviuerte la respuesta a un formato JSON
-            .then(data => console.log(data))  //toma los datos para mostrar en la consola
-            .catch(error => {
-                console.error("Hubo un problema al crear el usuario", error); //imprimir el error en la consola para depurar
-            })
-
-    }
-
-    const obtenerLista = () => {
-        fetch(API_URL + "/users/CarlosN")
-            .then((response) => {
-                if (response.status === 404) {
-                    crearUsuario()
-                }
-                return response.json()
-            })
-            .then(data => { setLista(data.todos) })  //toma los datos para mostrar en the array
-            .catch(error => {
-                console.error("Hubo un problema al obtener la lista de tareas", error); //imprimir el error en la consola para depurar
-            })
-    }
-
-    //funcion que manda la tarea (POST)
-    const crearTarea = async (text) => {
+    const cargarTareas = async () => {
         try {
-            const response = await fetch(API_URL + "/todos/CarlosN", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    label: text,
-                    is_done: false
-                })
-            })
-
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}: No se pudo crear la tarea`)
+            const resp = await fetch(`${API_URL}/users/${USER}`);
+            if (resp.status === 404) {
+                await crearUsuario();
+                return;
             }
-
-            await response.json()
-            obtenerLista() //Sincroniza con el backend tras agregar
-
+            const data = await resp.json();
+            setLista(data.todos || []);
         } catch (error) {
-            console.error("Hubo un problema al crear la tarea", error);
+            console.error("Error al cargar:", error);
         }
-    }
+    };
 
-    //funcion para eliminar una tarea (DELETE)
-    const eliminarTarea = async (id) => {
+    const crearUsuario = async () => {
         try {
-            const response = await fetch(API_URL + "/todos/" + id, {
-                method: "DELETE"
-            })
-
-            if (response.ok) {
-                obtenerLista() //Sincroniza con el backend tras eliminar
-            }
+            const resp = await fetch(`${API_URL}/users/${USER}`, { method: "POST" });
+            if (resp.ok) cargarTareas();
         } catch (error) {
-            console.error("Error al eliminar la tarea", error);
+            console.error("Error al crear usuario:", error);
         }
-    }
+    };
 
-    //funcion para limpiar todas las tareas
-    const limpiarTareas = async () => {
-        try {
-            const response = await fetch(API_URL + "/users/CarlosN", {
-                method: "DELETE"
-            })
-
-            if (response.ok) {
-                setLista([]) //actualiza la lista vacía en el front-end
-                crearUsuario() //asegura que el usuario exista de nuevo
-            }
-        } catch (error) {
-            console.error("Error al limpiar la lista", error);
-        }
-    }
-
-    //funcion para crear la tarea
-    const inputtext = (e) => {
+    const añadirTarea = async (e) => {
         if (e.key === "Enter" && tarea.trim() !== "") {
-            crearTarea(tarea)
-            setTarea("")
+            try {
+                const resp = await fetch(`${API_URL}/todos/${USER}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ label: tarea, is_done: false })
+                });
+                if (resp.ok) {
+                    setTarea(""); 
+                    cargarTareas(); 
+                }
+            } catch (error) {
+                console.error("Error al añadir:", error);
+            }
         }
-    }
+    };
 
-    useEffect(() => {
-        obtenerLista()
-    }, [])
+    const borrarTarea = async (id) => {
+        try {
+            const resp = await fetch(`${API_URL}/todos/${id}`, { method: "DELETE" });
+            if (resp.ok) cargarTareas();
+        } catch (error) {
+            console.error("Error al borrar:", error);
+        }
+    };
 
+    // 5. NUEVA FUNCIÓN: BORRAR TODO EL USUARIO (Y sus tareas)
+    const limpiarTodo = async () => {
+        try {
+            const resp = await fetch(`${API_URL}/users/${USER}`, { method: "DELETE" });
+            if (resp.ok) {
+                setLista([]); // Limpia el estado local
+                await crearUsuario(); // Recrea el usuario para que la API esté lista de nuevo
+            }
+        } catch (error) {
+            console.error("Error al limpiar:", error);
+        }
+    };
+
+    useEffect(() => { cargarTareas(); }, []);
 
     return (
-        <div className="container mt-5" style={{ maxWidth: "500px" }}>
-            <div className="card shadow-sm">
-                <div className="card-body p-4">
-                    <h1 className="text-center mb-4 display-6">Todo List Carlos</h1>
-
-                    <div className="input-group mb-3">
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="¿Qué necesitas hacer hoy?"
-                            onChange={(e) => setTarea(e.target.value)}
-                            value={tarea}
-                            onKeyDown={inputtext}
-                        />
-                    </div>
-
-                    {/* condicional que muestra un texto o la lista */}
-                    {lista.length === 0 ? (
-                        <div className="alert alert-light text-center border mt-3" role="alert">
-                            No hay tareas, añadir tareas
-                        </div>
-                    ) : (
-                        <>
-                            <ul className="list-group list-group-flush border rounded mt-3">
-                                {lista.map((item) => (
-                                    <li key={item.id} className="list-group-item d-flex justify-content-between align-items-center py-3">
-                                        <span>{item.label}</span>
-                                        <button
-                                            className="btn btn-outline-danger btn-sm border-0"
-                                            onClick={() => eliminarTarea(item.id)}
-                                        >
-                                            <span aria-hidden="true">&times;</span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                            <div className="d-flex justify-content-between align-items-center mt-3 p-2">
-                                <small className="text-muted">{lista.length} tareas restantes</small>
-                                <button
-                                    className="btn btn-sm btn-link text-danger text-decoration-none"
-                                    onClick={limpiarTareas}
-                                >
-                                    Limpiar todas
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
+        <div className="container mt-5" style={{ maxWidth: "400px" }}>
+            <h3 className="text-center">Todo API Carlos</h3>
+            <input
+                type="text"
+                className="form-control mb-3"
+                placeholder="Presiona Enter para añadir"
+                value={tarea}
+                onChange={(e) => setTarea(e.target.value)}
+                onKeyDown={añadirTarea}
+            />
+            <ul className="list-group">
+                {lista.length > 0 ? (
+                    lista.map((t) => (
+                        <li key={t.id} className="list-group-item d-flex justify-content-between align-items-center">
+                            {t.label}
+                            <button className="btn btn-sm btn-outline-danger" onClick={() => borrarTarea(t.id)}>
+                                <i className="fas fa-trash"></i> &times;
+                            </button>
+                        </li>
+                    ))
+                ) : (
+                    <li className="list-group-item text-muted text-center">No hay tareas, añade una.</li>
+                )}
+            </ul>
+            
+            {/* Botón de limpiar todo */}
+            {lista.length > 0 && (
+                <button className="btn btn-danger btn-sm w-100 mt-3" onClick={limpiarTodo}>
+                    Limpiar todas las tareas
+                </button>
+            )}
         </div>
-    )
-}
+    );
+};
+
